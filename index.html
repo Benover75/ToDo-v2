@@ -1,0 +1,507 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Modern Project Manager</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="icon" href="Favicon.ico">
+  <script>
+    tailwind.config = {
+      darkMode: 'class',
+      theme: {
+        extend: {
+          colors: {
+            primary: '#00F5FF',
+            low: '#4CBB17',
+            medium: '#FFA500',
+            high: '#FF5733',
+            critical: '#C70039'
+          }
+        }
+      }
+    };
+  </script>
+  <style>
+    body {
+      background: linear-gradient(135deg, #000000, #1a1a1a);
+      color: white;
+      min-height: 100vh;
+    }
+    .chat-box {
+      max-height: 300px;
+      overflow-y: auto;
+      border-radius: 0.5rem;
+    }
+    .task {
+      cursor: grab;
+      transition: transform 0.2s, box-shadow 0.2s;
+    }
+    .task:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 5px 15px rgba(0, 245, 255, 0.2);
+    }
+    .task.dragging {
+      opacity: 0.5;
+    }
+    .column {
+      min-height: 300px;
+      transition: background-color 0.3s;
+    }
+    .column.drag-over {
+      background-color: rgba(0, 245, 255, 0.1);
+    }
+    .modal {
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      background-color: rgba(0, 0, 0, 0.5);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      z-index: 50;
+    }
+    .modal-content {
+      background: #222;
+      padding: 2rem;
+      border-radius: 0.5rem;
+      width: 90%;
+      max-width: 500px;
+    }
+    @keyframes fadeIn {
+      from { opacity: 0; }
+      to { opacity: 1; }
+    }
+    .fade-in {
+      animation: fadeIn 0.3s ease-out;
+    }
+    .hidden {
+      display: none;
+    }
+    .video-conference {
+      background: #111;
+      border-radius: 0.5rem;
+      padding: 1rem;
+      height: 400px;
+    }
+    .video-container {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+      gap: 1rem;
+      height: 300px;
+      margin-bottom: 1rem;
+    }
+    .local-video {
+      width: 100%;
+      height: 100%;
+      background: #333;
+      border-radius: 0.5rem;
+    }
+    .remote-video {
+      background: #222;
+      border-radius: 0.5rem;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    .scheduler-container {
+      background: rgba(255, 255, 255, 0.05);
+      backdrop-filter: blur(10px);
+      border-radius: 0.5rem;
+      padding: 1.5rem;
+      border: 1px solid rgba(255, 255, 255, 0.1);
+    }
+    .scheduler-container input {
+      background: rgba(0, 0, 0, 0.3);
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      transition: all 0.3s ease;
+    }
+    .scheduler-container input:focus {
+      border-color: #00F5FF;
+      box-shadow: 0 0 0 2px rgba(0, 245, 255, 0.2);
+    }
+  </style>
+</head>
+<body class="dark">
+  <div class="p-4 space-y-8 max-w-6xl mx-auto">
+    <!-- Header -->
+    <header class="flex justify-between items-center">
+      <h1 class="text-3xl font-bold text-primary">Modern Project Board</h1>
+      <button id="newTaskBtn" class="bg-primary text-black px-4 py-2 rounded shadow hover:scale-105 transition-transform">New Task</button>
+    </header>
+
+    <!-- Kanban Board -->
+    <section class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+      <div id="todo" class="column bg-gray-900 p-4 rounded-lg shadow" ondragover="allowDrop(event)" ondrop="drop(event, 'todo')">
+        <h3 class="font-semibold mb-4 text-lg border-b border-gray-700 pb-2">To Do</h3>
+        <div class="space-y-2 tasks-container"></div>
+      </div>
+      <div id="inprogress" class="column bg-gray-900 p-4 rounded-lg shadow" ondragover="allowDrop(event)" ondrop="drop(event, 'inprogress')">
+        <h3 class="font-semibold mb-4 text-lg border-b border-gray-700 pb-2">In Progress</h3>
+        <div class="space-y-2 tasks-container"></div>
+      </div>
+      <div id="review" class="column bg-gray-900 p-4 rounded-lg shadow" ondragover="allowDrop(event)" ondrop="drop(event, 'review')">
+        <h3 class="font-semibold mb-4 text-lg border-b border-gray-700 pb-2">Review</h3>
+        <div class="space-y-2 tasks-container"></div>
+      </div>
+      <div id="done" class="column bg-gray-900 p-4 rounded-lg shadow" ondragover="allowDrop(event)" ondrop="drop(event, 'done')">
+        <h3 class="font-semibold mb-4 text-lg border-b border-gray-700 pb-2">Done</h3>
+        <div class="space-y-2 tasks-container"></div>
+      </div>
+    </section>
+
+    <!-- Video Conference & Scheduler Section -->
+    <section class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+      <!-- Video Conference -->
+      <div class="video-conference">
+        <h2 class="text-xl font-semibold mb-4">Video Conference</h2>
+        <div class="video-container">
+          <div class="local-video">
+            <div class="w-full h-full flex items-center justify-center text-gray-400">
+              Your Camera
+            </div>
+          </div>
+          <div class="remote-video">
+            <div class="text-gray-400">Team Member</div>
+          </div>
+          <div class="remote-video">
+            <div class="text-gray-400">Team Member</div>
+          </div>
+        </div>
+        <div class="flex gap-2">
+          <button class="flex-1 bg-primary/80 text-black px-4 py-2 rounded hover:bg-primary transition-colors">
+            Join Call
+          </button>
+          <button class="bg-gray-700 px-4 py-2 rounded hover:bg-gray-600 transition-colors">
+            Mute
+          </button>
+          <button class="bg-gray-700 px-4 py-2 rounded hover:bg-gray-600 transition-colors">
+            Video Off
+          </button>
+        </div>
+      </div>
+
+      <!-- Updated Scheduler -->
+      <div class="scheduler-container">
+        <h2 class="text-xl font-semibold mb-4">Schedule a Meeting</h2>
+        <div class="space-y-4">
+          <div>
+            <label class="block text-sm mb-2">Meeting Title</label>
+            <input type="text" id="meetingTitle" placeholder="Enter meeting title" 
+                   class="w-full p-2 rounded text-white text-base focus:outline-none">
+          </div>
+          <div class="grid grid-cols-2 gap-4">
+            <div>
+              <label class="block text-sm mb-2">Date</label>
+              <input type="date" id="meetingDate" 
+                     class="w-full p-2 rounded text-white text-base focus:outline-none">
+            </div>
+            <div>
+              <label class="block text-sm mb-2">Time</label>
+              <input type="time" id="meetingTime" 
+                     class="w-full p-2 rounded text-white text-base focus:outline-none">
+            </div>
+          </div>
+          <div>
+            <label class="block text-sm mb-2">Participants</label>
+            <select multiple class="w-full p-2 rounded bg-gray-800 text-white text-base h-32">
+              <option value="alex">Alex</option>
+              <option value="sam">Sam</option>
+              <option value="jamie">Jamie</option>
+              <option value="taylor">Taylor</option>
+            </select>
+          </div>
+          <button id="scheduleBtn" 
+                  class="w-full bg-primary text-black px-4 py-2 rounded hover:scale-105 transition-transform">
+            Schedule Meeting
+          </button>
+        </div>
+        <div id="meetingsList" class="mt-4 space-y-2 text-sm">
+          <!-- Meetings will be listed here -->
+        </div>
+      </div>
+    </section>
+
+    <!-- Chat Section -->
+    <section>
+      <h2 class="text-xl font-semibold mb-2">Team Chat</h2>
+      <div id="chatBox" class="chat-box bg-gray-800 p-4 space-y-2">
+        <div class="text-sm">Alex: Don't forget the deadline is tomorrow.</div>
+        <div class="text-sm">Sam: I'm wrapping up the review now.</div>
+      </div>
+      <div class="mt-2 flex gap-2">
+        <input type="text" id="chatInput" placeholder="Type a message..." class="flex-1 p-2 rounded bg-gray-700 text-white text-base focus:outline-none">
+        <button id="sendBtn" class="bg-primary text-black px-4 py-2 rounded hover:scale-105 transition-transform">Send</button>
+      </div>
+    </section>
+  </div>
+
+  <!-- New Task Modal -->
+  <div id="taskModal" class="modal hidden">
+    <div class="modal-content fade-in">
+      <h2 class="text-xl font-semibold mb-4 text-primary">Create New Task</h2>
+      <div class="space-y-4">
+        <div>
+          <label class="block text-sm mb-2">Task Title</label>
+          <input type="text" id="taskTitle" placeholder="Enter task title" class="w-full p-2 rounded bg-gray-700 text-white text-base">
+        </div>
+        <div>
+          <label class="block text-sm mb-2">Description</label>
+          <textarea id="taskDescription" rows="3" placeholder="Enter task description" class="w-full p-2 rounded bg-gray-700 text-white text-base"></textarea>
+        </div>
+        <div>
+          <label class="block text-sm mb-2">Priority</label>
+          <select id="taskPriority" class="w-full p-2 rounded bg-gray-700 text-white text-base">
+            <option value="low">Low</option>
+            <option value="medium">Medium</option>
+            <option value="high">High</option>
+            <option value="critical">Critical</option>
+          </select>
+        </div>
+        <div>
+          <label class="block text-sm mb-2">Assignee</label>
+          <select id="taskAssignee" class="w-full p-2 rounded bg-gray-700 text-white text-base">
+            <option value="alex">Alex</option>
+            <option value="sam">Sam</option>
+            <option value="jamie">Jamie</option>
+            <option value="taylor">Taylor</option>
+          </select>
+        </div>
+      </div>
+      <div class="mt-6 flex justify-end space-x-2">
+        <button id="cancelTaskBtn" class="px-4 py-2 rounded bg-gray-700 hover:bg-gray-600 transition-colors">Cancel</button>
+        <button id="createTaskBtn" class="px-4 py-2 rounded bg-primary text-black hover:scale-105 transition-transform">Create Task</button>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    let taskIdCounter = 1;
+    const teamMembers = {
+      'alex': { name: 'Alex', avatar: '👨‍💻' },
+      'sam': { name: 'Sam', avatar: '👩‍💼' },
+      'jamie': { name: 'Jamie', avatar: '🧑‍💻' },
+      'taylor': { name: 'Taylor', avatar: '👩‍🔬' }
+    };
+
+    const initialTasks = [
+      { id: taskIdCounter++, title: 'Design homepage', description: 'Create wireframes', status: 'todo', priority: 'medium', assignee: 'alex' },
+      { id: taskIdCounter++, title: 'Fix login bug', description: 'Users cannot reset password', status: 'inprogress', priority: 'high', assignee: 'sam' },
+      { id: taskIdCounter++, title: 'Update API docs', description: 'Document new endpoints', status: 'review', priority: 'low', assignee: 'jamie' },
+      { id: taskIdCounter++, title: 'Release v1.2', description: 'Prepare release notes', status: 'done', priority: 'medium', assignee: 'taylor' }
+    ];
+
+    let tasks = [...initialTasks];
+
+    document.addEventListener('DOMContentLoaded', () => {
+      renderAllTasks();
+      setupEventListeners();
+    });
+
+    function setupEventListeners() {
+      document.getElementById('newTaskBtn').addEventListener('click', openTaskModal);
+      document.getElementById('cancelTaskBtn').addEventListener('click', closeTaskModal);
+      document.getElementById('createTaskBtn').addEventListener('click', createNewTask);
+      document.getElementById('sendBtn').addEventListener('click', sendChatMessage);
+      document.getElementById('chatInput').addEventListener('keypress', (e) => {
+        if (e.key === 'Enter') sendChatMessage();
+      });
+      document.getElementById('scheduleBtn').addEventListener('click', scheduleMeeting);
+    }
+
+    function drag(event) {
+      event.dataTransfer.setData('text', event.target.id);
+      event.target.classList.add('dragging');
+    }
+
+    function allowDrop(event) {
+      event.preventDefault();
+      event.currentTarget.classList.add('drag-over');
+    }
+
+    function drop(event, columnId) {
+      event.preventDefault();
+      const taskId = event.dataTransfer.getData('text');
+      const taskElement = document.getElementById(taskId);
+      
+      if (taskElement) {
+        const tasksContainer = event.currentTarget.querySelector('.tasks-container');
+        tasksContainer.appendChild(taskElement);
+        const taskIndex = tasks.findIndex(task => task.id === parseInt(taskId.split('-')[1]));
+        if (taskIndex !== -1) {
+          tasks[taskIndex].status = columnId;
+        }
+        taskElement.classList.remove('dragging');
+      }
+      event.currentTarget.classList.remove('drag-over');
+    }
+
+    function dragEnd(event) {
+      event.target.classList.remove('dragging');
+      document.querySelectorAll('.column').forEach(col => {
+        col.classList.remove('drag-over');
+      });
+    }
+
+    function createTaskElement(task) {
+      const taskElement = document.createElement('div');
+      taskElement.id = `task-${task.id}`;
+      taskElement.className = `task bg-gray-800 p-3 rounded shadow-md fade-in`;
+      taskElement.draggable = true;
+      taskElement.setAttribute('ondragstart', 'drag(event)');
+      taskElement.setAttribute('ondragend', 'dragEnd(event)');
+      
+      let priorityColor;
+      switch(task.priority) {
+        case 'low': priorityColor = 'bg-low'; break;
+        case 'medium': priorityColor = 'bg-medium'; break;
+        case 'high': priorityColor = 'bg-high'; break;
+        case 'critical': priorityColor = 'bg-critical'; break;
+        default: priorityColor = 'bg-gray-500';
+      }
+      
+      const assignee = teamMembers[task.assignee];
+      
+      taskElement.innerHTML = `
+        <div class="flex justify-between items-start">
+          <h4 class="font-medium">${task.title}</h4>
+          <span class="${priorityColor} text-xs px-2 py-1 rounded-full text-white uppercase">${task.priority}</span>
+        </div>
+        <p class="text-sm text-gray-400 mt-1">${task.description}</p>
+        <div class="mt-3 flex justify-between items-center">
+          <span class="text-xs text-gray-500">ID: ${task.id}</span>
+          <div class="flex items-center">
+            <span class="text-sm mr-1">${assignee.avatar}</span>
+            <span class="text-xs">${assignee.name}</span>
+          </div>
+        </div>
+      `;
+      return taskElement;
+    }
+
+    function renderAllTasks() {
+      document.querySelectorAll('.tasks-container').forEach(container => {
+        container.innerHTML = '';
+      });
+      tasks.forEach(task => {
+        const column = document.getElementById(task.status);
+        if (column) {
+          const tasksContainer = column.querySelector('.tasks-container');
+          tasksContainer.appendChild(createTaskElement(task));
+        }
+      });
+    }
+
+    function openTaskModal() {
+      document.getElementById('taskModal').classList.remove('hidden');
+      document.getElementById('taskTitle').focus();
+    }
+
+    function closeTaskModal() {
+      document.getElementById('taskModal').classList.add('hidden');
+      document.getElementById('taskTitle').value = '';
+      document.getElementById('taskDescription').value = '';
+      document.getElementById('taskPriority').value = 'medium';
+      document.getElementById('taskAssignee').value = 'alex';
+    }
+
+    function createNewTask() {
+      const title = document.getElementById('taskTitle').value.trim();
+      const description = document.getElementById('taskDescription').value.trim();
+      const priority = document.getElementById('taskPriority').value;
+      const assignee = document.getElementById('taskAssignee').value;
+      
+      if (!title) {
+        alert('Please enter a task title');
+        return;
+      }
+      
+      const newTask = {
+        id: taskIdCounter++,
+        title,
+        description: description || 'No description provided',
+        status: 'todo',
+        priority,
+        assignee
+      };
+      
+      tasks.push(newTask);
+      const todoColumn = document.getElementById('todo');
+      const tasksContainer = todoColumn.querySelector('.tasks-container');
+      tasksContainer.appendChild(createTaskElement(newTask));
+      closeTaskModal();
+    }
+
+    function sendChatMessage() {
+      const chatInput = document.getElementById('chatInput');
+      const message = chatInput.value.trim();
+      
+      if (!message) return;
+      
+      const chatBox = document.getElementById('chatBox');
+      const messageElement = document.createElement('div');
+      messageElement.className = 'text-sm fade-in';
+      messageElement.textContent = `You: ${message}`;
+      chatBox.appendChild(messageElement);
+      
+      chatInput.value = '';
+      chatBox.scrollTop = chatBox.scrollHeight;
+      
+      setTimeout(() => {
+        const responseElement = document.createElement('div');
+        responseElement.className = 'text-sm fade-in';
+        const responses = [
+          "I'll check on that right away.",
+          "Thanks for the update!",
+          "Let's discuss this in our next meeting.",
+          "Great progress!",
+          "I need more information about this."
+        ];
+        const randomMember = Object.values(teamMembers)[Math.floor(Math.random() * 4)];
+        responseElement.textContent = `${randomMember.name}: ${responses[Math.floor(Math.random() * responses.length)]}`;
+        chatBox.appendChild(responseElement);
+        chatBox.scrollTop = chatBox.scrollHeight;
+      }, 1000);
+    }
+
+    function scheduleMeeting() {
+      const date = document.getElementById('meetingDate').value;
+      const time = document.getElementById('meetingTime').value;
+      const title = document.getElementById('meetingTitle').value.trim() || 'Untitled Meeting';
+      
+      if (!date || !time) {
+        alert('Please select both date and time');
+        return;
+      }
+      
+      const meetingDateTime = new Date(`${date}T${time}`);
+      const formattedDate = meetingDateTime.toLocaleDateString('en-US', {
+        month: 'short',
+        day: 'numeric',
+        year: 'numeric'
+      });
+      
+      const formattedTime = meetingDateTime.toLocaleTimeString('en-US', {
+        hour: '2-digit',
+        minute: '2-digit'
+      });
+      
+      const meetingsList = document.getElementById('meetingsList');
+      const meetingElement = document.createElement('div');
+      meetingElement.className = 'bg-gray-800 p-2 rounded fade-in';
+      meetingElement.innerHTML = `
+        <div class="font-medium">${title}</div>
+        <div class="text-xs text-gray-400">${formattedDate} at ${formattedTime}</div>
+      `;
+      
+      meetingsList.appendChild(meetingElement);
+      
+      document.getElementById('meetingDate').value = '';
+      document.getElementById('meetingTime').value = '';
+      document.getElementById('meetingTitle').value = '';
+    }
+  </script>
+</body>
+</html>
